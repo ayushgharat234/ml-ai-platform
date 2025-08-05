@@ -1,0 +1,87 @@
+version: '3.9'
+
+services:
+  redis:
+    image: redis:latest
+    container_name: redis_container
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - backend
+
+  api:
+    build:
+      context: ./api
+    container_name: api_container
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  worker:
+    build:
+      context: ./worker
+    container_name: celery_worker
+    command: celery -A tasks worker --loglevel=info
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  db: 
+    image: postgres:14
+    container_name: postgres
+    environment:
+      - POSTGRES_DB=celery_db
+      - POSTGRES_USER=celery_user
+      - POSTGRES_PASSWORD=celery_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U celery_user -d celery_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:latest 
+    container_name: nginx_container 
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - api
+    networks:
+      - backend
+
+volumes:
+  pgdata:
+
+networks:
+  backend:
+    driver: bridge
+    name: ai_platform_network
