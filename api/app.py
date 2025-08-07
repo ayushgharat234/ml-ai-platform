@@ -3,10 +3,15 @@ from pydantic import BaseModel
 import pickle
 import numpy as np
 import redis
+import time     
+from prometheus_client import Summary, Counter
 import json
 from typing import List
+from prometheus_fastapi_instrumentator import Instrumentator 
+
 
 app = FastAPI()
+Instrumentator().instrument(app).expose(app)
 
 class Features(BaseModel):
     features: List[float]
@@ -35,13 +40,18 @@ except Exception as e:
 async def root():
     return {"message": "ML Async API Running.......!"}
 
+PREDICTION_TIME = Summary("prediction_duration_seconds", "Time spent on predictions")
+PREDICTION_COUNTER = Counter("predictions_total", "Total number of predictions")
+
 @app.post("/predict/")
+@PREDICTION_TIME.time()
 async def predict(data: Features):
     if not model_loaded:
         raise HTTPException(status_code=500, detail="Model not loaded")
     
     try:
         # Make prediction directly in API for simplicity
+        PREDICTION_COUNTER.inc()
         features_array = np.array(data.features).reshape(1, -1)
         prediction = model.predict(features_array)
         probability = model.predict_proba(features_array)

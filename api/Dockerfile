@@ -8,6 +8,10 @@ COPY . .
 # Stage 2: Run
 FROM python:3.10-slim
 WORKDIR /app
+
+RUN adduser --disabled-password --gecos '' appuser 
+USER appuser
+
 COPY --from=builder /usr/local/lib/python3.10 /usr/local/lib/python3.10
 COPY --from=builder /app /app
 

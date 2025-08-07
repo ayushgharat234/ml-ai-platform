@@ -2,6 +2,9 @@ FROM python:3.10-slim AS worker
 
 WORKDIR /app
 
+RUN adduser --disabled-password --gecos '' appuser 
+USER appuser
+
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
