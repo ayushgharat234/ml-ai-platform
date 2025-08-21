@@ -17,46 +17,13 @@ services:
     env_file:
       - .env 
 
-  api:
-    build:
-      context: ./api
-    container_name: api_container
-    ports:
-      - "8000:8000"
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - backend
-    restart: unless-stopped
-    environment:
-      - PYTHONUNBUFFERED=1
-    env_file:
-      - .env 
-
-  worker:
-    build:
-      context: ./worker
-    container_name: celery_worker
-    command: celery -A tasks worker --loglevel=info
-    depends_on:
-      redis:
-        condition: service_healthy
-    networks:
-      - backend
-    restart: unless-stopped
-    environment:
-      - PYTHONUNBUFFERED=1
-    env_file:
-      - .env 
-
   db: 
     image: postgres:14
     container_name: postgres
     environment:
-      - POSTGRES_DB=celery_db
-      - POSTGRES_USER=celery_user
-      - POSTGRES_PASSWORD=celery_pass
+      POSTGRES_DB: celery_db
+      POSTGRES_USER: celery_user
+      POSTGRES_PASSWORD: celery_pass
     ports:
       - "5432:5432"
     volumes:
@@ -69,6 +36,43 @@ services:
       timeout: 10s
       retries: 3
     restart: unless-stopped
+    env_file:
+      - .env 
+
+  api:
+    build:
+      context: ./api
+    container_name: api_container
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: 1
+    env_file:
+      - .env 
+
+  worker:
+    build:
+      context: ./worker
+    container_name: celery_worker
+    command: celery -A tasks worker --loglevel=info
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: 1
     env_file:
       - .env 
 
@@ -105,13 +109,13 @@ services:
       - "3000:3000"
     volumes:
       - grafana-storage:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
-      - ./monitoring/provisioning/dashboards:/etc/grafana/provisioning/dashboards/
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
     depends_on:
       - prometheus
     environment:
-      - GF_SECURITY_ADMIN_USER=admin 
-      - GF_SECURITY_ADMIN_PASSWORD=admin 
+      GF_SECURITY_ADMIN_USER: admin 
+      GF_SECURITY_ADMIN_PASSWORD: admin 
     networks:
       - backend
 

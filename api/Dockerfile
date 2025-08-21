@@ -1,22 +1,29 @@
-# Stage 1: Build
-FROM python:3.10-slim AS builder
+FROM python:3.10-slim
+
+# Set workdir
 WORKDIR /app
+
+# Install dependencies as root
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Add a non-root user AFTER dependencies (so pip installs work cleanly)
+RUN adduser --disabled-password --gecos '' appuser
+
+# Copy app code
 COPY . .
 
-# Stage 2: Run
-FROM python:3.10-slim
-WORKDIR /app
-
-RUN adduser --disabled-password --gecos '' appuser 
+# Switch to non-root user
 USER appuser
 
-COPY --from=builder /usr/local/lib/python3.10 /usr/local/lib/python3.10
-COPY --from=builder /app /app
+# Expose port (optional but nice for docs)
+EXPOSE 8000
 
-# Add healthcheck
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+# Healthcheck (optional but useful for k8s / docker-compose)
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+  CMD curl --fail http://localhost:8000/health || exit 1
 
-CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run uvicorn
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

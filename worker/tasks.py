@@ -1,43 +1,54 @@
-from celery import Celery 
-import pickle 
-import numpy as np 
+from celery import Celery
+import pickle
+import numpy as np
 import logging
-import time
+import os
+from typing import List
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Load model with error handling
-try:
-    model = pickle.load(open("model.pkl", "rb"))
-    logger.info("Model loaded successfully")
-    model_loaded = True
-except Exception as e:
-    logger.error(f"Error loading model: {e}")
-    model_loaded = False
-    model = None
+def load_model():
+    try:
+        model = pickle.load(open("model.pkl", "rb"))
+        logger.info("Model loaded successfully")
+        return model
+    except Exception as e:
+        logger.error(f"Error loading model: {e}")
+        return None
 
-# Celery configuration with retry settings
-celery = Celery('tasks', broker="redis://redis:6379/0")
+model = load_model()
+model_loaded = model is not None
 
-# Configure Celery for better reliability
-celery.conf.update(
-    broker_connection_retry_on_startup=True,
-    broker_connection_retry=True,
-    broker_connection_max_retries=10,
-    task_serializer='json',
-    accept_content=['json'],
-    result_serializer='json',
-    timezone='UTC',
-    enable_utc=True,
+# Celery configuration using environment variables
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0")
+CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "db+postgresql://celery_user:celery_pass@db:5432/celery_db")
+
+celery = Celery(
+    'tasks',
+    broker=CELERY_BROKER_URL,
+    backend=CELERY_RESULT_BACKEND
 )
 
-@celery.task 
-def predict_task(features: list[float]):
-    if not model_loaded:
-        raise Exception("Model not loaded")
+@celery.task(
+    name='tasks.predict_task',
+    bind=True,
+    autoretry_for=(Exception,),   # retry on any exception
+    retry_backoff=True,           # exponential backoff
+    retry_kwargs={'max_retries': 5}  # prevent infinite retries
+)
+def predict_task(self, features: List[float]):
+    global model, model_loaded
     
+    if not model_loaded:
+        logger.warning("Model not loaded, attempting reload...")
+        model = load_model()
+        model_loaded = model is not None
+        if not model_loaded:
+            raise self.retry(exc=ConnectionError("Model not available"))
+
     try:
         features_array = np.array(features).reshape(1, -1)
         pred = model.predict(features_array)
@@ -48,4 +59,4 @@ def predict_task(features: list[float]):
         }
     except Exception as e:
         logger.error(f"Prediction error: {e}")
-        raise Exception(f"Prediction failed: {str(e)}")
+        raise self.retry(exc=e)  # retry prediction with backoff

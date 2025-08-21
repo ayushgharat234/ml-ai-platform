@@ -1,224 +1,215 @@
-# AI Platform - System Architecture
+# AI Platform: Scalable ML Inference with Monitoring & Analytics
 
-## Overview
-This is a microservices-based AI platform that provides machine learning prediction capabilities through a REST API. The system uses a distributed architecture with separate services for API handling, background task processing, and data storage.
+[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/) [![Celery](https://img.shields.io/badge/Celery-37814A?style=for-the-badge&logo=celery)](https://docs.celeryq.dev/en/stable/) [![Redis](https://img.shields.io/badge/Redis-D82C20?style=for-the-badge&logo=redis)](https://redis.io/) [![Postgres](https://img.shields.io/badge/Postgres-336791?style=for-the-badge&logo=postgresql)](https://www.postgresql.org/) [![Nginx](https://img.shields.io/badge/Nginx-009639?style=for-the-badge&logo=nginx)](https://www.nginx.com/) [![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus)](https://prometheus.io/) [![Grafana](https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana)](https://grafana.com/) [![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/) 
 
-## System Architecture
+---
+
+## Architecture Diagram
+
+![Architecture Diagram](architecture/architecture.png)
+
+---
+
+## Project Overview
+
+This project demonstrates a **production-grade AI inference platform** built with modern DevOps & MLOps tools.  
+It integrates:  
+
+- **FastAPI** → API Gateway for ML requests  
+- **Celery** → Asynchronous task execution  
+- **Redis** → Broker for distributed workers  
+- **Postgres** → Persistent storage of results for analytics  
+- **Prometheus & Grafana** → Monitoring and alerting  
+- **Nginx** → Reverse proxy for production-like routing  
+
+---
+
+## Project Structure
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Client Apps   │    │   Web Browser   │    │   API Clients   │
-└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
-          │                      │                      │
-          └──────────────────────┼──────────────────────┘
-                                 │
-                    ┌─────────────▼─────────────┐
-                    │     FastAPI Service       │
-                    │     (Port 8000)           │
-                    │  - REST API Endpoints     │
-                    │  - Request Validation     │
-                    │  - Direct Predictions     │
-                    └─────────────┬─────────────┘
-                                  │
-                    ┌─────────────▼─────────────┐
-                    │      Redis Service        │
-                    │     (Port 6379)           │
-                    │  - Message Broker         │
-                    │  - Task Queue             │
-                    │  - Caching Layer          │
-                    └─────────────┬─────────────┘
-                                  │
-                    ┌─────────────▼─────────────┐
-                    │   Celery Worker Service   │
-                    │  - Background Tasks       │
-                    │  - ML Model Processing    │
-                    │  - Async Predictions      │
-                    └─────────────┬─────────────┘
-                                  │
-                    ┌─────────────▼─────────────┐
-                    │   PostgreSQL Database     │
-                    │     (Port 5432)           │
-                    │  - Task Results Storage   │
-                    │  - Application Data       │
-                    └───────────────────────────┘
+├── api/ # FastAPI service  
+│ ├── app.py  
+│ ├── model.pkl  
+│ ├── train_and_save_model.py  
+│ └── requirements.txt  
+│  
+├── worker/ # Celery worker  
+│ ├── tasks.py  
+│ ├── model.pkl  
+│ └── requirements.txt  
+│  
+├── nginx/ # Reverse proxy  
+│ └── default.conf  
+│  
+├── monitoring/ # Prometheus & Grafana configs  
+│ ├── prometheus.yml  
+│ └── grafana/  
+│ ├── dashboards/  
+│ │ └── api_dashboard.json  
+│ └── provisioning/  
+│ └── dashboards.yml  
+│  
+├── docker-compose.yml # Multi-service stack  
+├── .env # Environment variables  
+├── screenshots/ # Visual workflow proofs  
+├── load_test.py # Script for multiple requests  
+├── README.md # Documentation (this file)  
 ```
 
-## Components Breakdown
+---
 
-### 1. **FastAPI Service** (`api/`)
-- **Purpose**: Main API gateway and request handler
-- **Port**: 8000
-- **Key Features**:
-  - REST API endpoints for predictions
-  - Request validation using Pydantic
-  - Health monitoring
-  - Direct ML model predictions (synchronous)
-  - Redis connectivity for caching
+## Architecture Workflow
 
-**Endpoints**:
-- `GET /` - Service status
-- `GET /health` - Health check with model and Redis status
-- `POST /predict/` - Make predictions with feature data
+1. **Client Request** → Send input via FastAPI (`/predict`).  
+2. **Celery Task** → Request sent to Redis → Worker picks it up.  
+3. **ML Model** → Iris classifier runs inference.  
+4. **Results Stored** → Postgres DB saves results for later analytics.  
+5. **Monitoring** → Prometheus scrapes metrics, Grafana visualizes them.  
+6. **Logs** → Redis, Worker, API logs all visible for debugging.  
+7. **Reverse Proxy** → Requests pass through Nginx.  
 
-### 2. **Redis Service**
-- **Purpose**: Message broker and caching layer
-- **Port**: 6379
-- **Key Features**:
-  - Task queue management for Celery
-  - Caching layer for API responses
-  - Health monitoring with ping checks
+---
 
-### 3. **Celery Worker Service** (`worker/`)
-- **Purpose**: Background task processing
-- **Key Features**:
-  - Asynchronous ML model predictions
-  - Task queue processing
-  - Error handling and logging
-  - Redis-based task distribution
+## Visual Showcase
 
-### 4. **PostgreSQL Database**
-- **Purpose**: Persistent data storage
-- **Port**: 5432
-- **Key Features**:
-  - Task result storage
-  - Application data persistence
-  - Health monitoring with pg_isready
+### 1️⃣ Submitting a Prediction Request
+*Shows a `curl` command sending data to the `/predict` endpoint and receiving a task ID.*
+![API Request](screenshots/08-posting-to-the-api.png)
 
-## Data Flow
+### 2️⃣ Celery Worker Processing the Task
+*Demonstrates the worker logs as it picks up and executes the inference task.*
+![Celery Worker Logs](screenshots/13-logs-of-the-celery-worker.png)
 
-### Synchronous Prediction Flow:
-```
-1. Client → FastAPI (/predict/)
-2. FastAPI → Load ML Model
-3. FastAPI → Process Features
-4. FastAPI → Return Prediction + Probabilities
-```
+### 3️⃣ Querying Stored Results in PostgreSQL
+*A `psql` query showing the prediction result saved in the `predictions` table.*
+![Postgres Results](screenshots/14-query-the-results-storedin-postgres.png)
 
-### Asynchronous Prediction Flow (via Celery):
-```
-1. Client → FastAPI (/predict/async)
-2. FastAPI → Redis (Task Queue)
-3. Redis → Celery Worker
-4. Celery Worker → Load ML Model
-5. Celery Worker → Process Features
-6. Celery Worker → Store Results (PostgreSQL)
-7. Client → Check Task Status
-```
+### 4️⃣ Visualizing Performance in Grafana
+*The Grafana dashboard displaying key metrics like request latency and throughput.*
+![Grafana Dashboard](screenshots/03-manual-dashboard-creation.png)
 
-## ML Model
-
-- **Model Type**: Logistic Regression (scikit-learn)
-- **Dataset**: Iris dataset (4 features, 3 classes)
-- **Training**: Done via `train_and_save_model.py`
-- **Storage**: Pickle format (`model.pkl`)
-- **Features**: [sepal_length, sepal_width, petal_length, petal_width]
-
-## Issues Fixed
-
-### 1. **Import Error Resolution**
-- **Problem**: API tried to import from `worker.tasks` across containers
-- **Solution**: Removed cross-container imports, made API self-contained
-
-### 2. **Redis Connection Issues**
-- **Problem**: Worker used `localhost:6379` instead of service name
-- **Solution**: Changed to `redis:6379` for container communication
-
-### 3. **Docker Configuration**
-- **Problem**: Inconsistent Python versions (3.10 vs 3.11)
-- **Solution**: Standardized to Python 3.10 across all services
-
-### 4. **Error Handling**
-- **Problem**: No error handling for model loading or predictions
-- **Solution**: Added comprehensive try-catch blocks and logging
-
-### 5. **Health Monitoring**
-- **Problem**: No health checks for services
-- **Solution**: Added healthcheck endpoints and Docker healthchecks
-
-### 6. **Dependency Management**
-- **Problem**: Unversioned dependencies
-- **Solution**: Pinned all package versions for consistency
+---
 
 ## Getting Started
 
-### Prerequisites
-- Docker and Docker Compose
-- Python 3.10+ (for local development)
-
-### Quick Start
+### 1. Clone Repo
 ```bash
-# Build and start all services
+git clone https://github.com/your-username/ai-platform.git
+cd ai-platform
+```
+
+### 2. Build & Start All Containers
+```bash
 docker-compose up --build
-
-# Test the API
-python test_api.py
-
-# View logs
-docker-compose logs -f api
 ```
 
-### API Usage
+API Testing  
 
-#### Health Check
-```bash
-curl http://localhost:8000/health
-```
-
-#### Make Prediction
+### Single Request
 ```bash
 curl -X POST http://localhost:8000/predict/ \
   -H "Content-Type: application/json" \
   -d '{"features": [5.1, 3.5, 1.4, 0.2]}'
 ```
-
-## Monitoring and Debugging
-
-### Service Health
-- **API**: `http://localhost:8000/health`
-- **Redis**: `docker exec redis_container redis-cli ping`
-- **PostgreSQL**: `docker exec postgres pg_isready -U celery_user -d celery_db`
-
-### Logs
-```bash
-# All services
-docker-compose logs
-
-# Specific service
-docker-compose logs api
-docker-compose logs worker
-docker-compose logs redis
+Output:
+```json
+{"task_id":"c2815e23-445e-4c18-992c-a2e30468446d","status":"Task submitted"}
 ```
 
-### Container Status
+### Multiple Requests (Load Test)
 ```bash
-docker-compose ps
+python load_test.py
 ```
 
-## Development
+### Query Task Result
+```bash
+curl http://localhost:8000/results/c2815e23-445e-4c18-992c-a2e30468446d
+```
 
-### Adding New Endpoints
-1. Edit `api/app.py`
-2. Add new route handlers
-3. Update requirements if needed
-4. Rebuild containers
+---
 
-### Modifying ML Model
-1. Update `train_and_save_model.py`
-2. Run training script
-3. Copy new `model.pkl` to both `api/` and `worker/` directories
-4. Rebuild containers
+## Postgres Integration
 
-### Scaling
-- **API**: Scale with `docker-compose up --scale api=3`
-- **Worker**: Scale with `docker-compose up --scale worker=2`
-- **Redis**: Use Redis Cluster for production
-- **Database**: Use managed PostgreSQL service for production
+### Connect to Database
+```bash
+docker exec -it postgres psql -U celery_user -d celery_db
+```
 
-## Production Considerations
+### Query Predictions
+```sql
+SELECT * FROM predictions;
+```
 
-1. **Security**: Add authentication, HTTPS, input validation
-2. **Monitoring**: Add Prometheus/Grafana for metrics
-3. **Logging**: Centralized logging with ELK stack
-4. **Backup**: Database backup strategies
-5. **Load Balancing**: Use nginx or cloud load balancer
-6. **Environment Variables**: Use `.env` files for configuration 
+---
+
+## Monitoring & Observability
+
+### Prometheus Metrics 
+- [http://localhost:9090](http://localhost:9090)  
+
+### Grafana Dashboards
+- [http://localhost:3000](http://localhost:3000)  
+
+---
+
+## Full Command Reference
+
+```bash
+# Bring up services
+docker-compose up --build
+
+# Health-check API
+curl http://localhost:8000/health
+
+# Send prediction request
+curl -X POST http://localhost:8000/predict/ -H "Content-Type: application/json" -d '{"features": [5.1, 3.5, 1.4, 0.2]}'
+
+# Query results
+curl http://localhost:8000/results/{task_id}
+
+# Logs
+docker logs -f api_container
+docker logs -f celery_worker
+docker logs -f redis_container
+docker logs -f postgres
+
+# Connect Postgres
+docker exec -it postgres psql -U celery_user -d celery_db
+
+# Query stored results
+SELECT * FROM predictions;
+
+# Access monitoring
+http://localhost:9090    # Prometheus
+http://localhost:3000    # Grafana
+http://localhost:8000    # API
+```
+
+---
+
+## Key Features
+
+- Asynchronous Inference (Celery + Redis)  
+- Persistent Results (Postgres)  
+- Monitoring & Alerts (Prometheus + Grafana)  
+- Reverse Proxy (Nginx)  
+- Logs for Debugging (API, Worker, Redis, Postgres)  
+- Extensible ML Backend (plug & play models)  
+
+---
+
+## Future Improvements
+
+-  Model versioning & experiment tracking (MLflow / DVC)  
+-  Authentication & RBAC for secure APIs  
+-  Advanced monitoring (latency histograms, error rate alerts)  
+- Kubernetes migration with Helm charts  
+- Horizontal auto-scaling of workers  
+
+---
+
+## Conclusion
+
+This project showcases an end-to-end AI platform integrating ML inference, async task processing, persistent analytics, monitoring, and observability.  
+
+It serves as a blueprint for production ML systems and demonstrates strong engineering practices in containerization, DevOps, and MLOps.  
